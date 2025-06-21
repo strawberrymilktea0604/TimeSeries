@@ -1,102 +1,135 @@
 """
-GDELT Hot Topics Forecaster - Optimized Version
+GDELT Hot Topics Forecaster - Fixed Import Version
 User: strawberrymilktea0604
-Current Time: 2025-06-21 10:50:55 UTC
-Location: TungNguyen/demo/app.py
+Current Date and Time: 2025-06-21 12:04:30 UTC
+Fixed: Import errors resolved
 """
 
-# Import từ file optimized
 import streamlit as st
 import sys
 from pathlib import Path
-
-# Add current directory to path
-current_dir = Path(__file__).parent
-sys.path.append(str(current_dir))
+import gc
 
 # Page config
 st.set_page_config(
-    page_title="🔥 GDELT Hot Topics Forecaster - Optimized",
+    page_title="🔥 GDELT Hot Topics Forecaster - Fixed",
     page_icon="🔥",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Import optimized functions
-from optimized_file_upload import (
-    process_large_zip_chunked,
-    smart_data_sampling,
-    get_memory_usage,
-    MemoryManager
-)
+# Add current directory to path
+current_dir = Path(__file__).parent
+sys.path.append(str(current_dir))
 
-def main():
-    """Main optimized application"""
-    
-    st.title("🔥 GDELT Hot Topics Forecaster - Optimized")
-    
-    # User info
+# Import optimized functions - FIXED IMPORTS
+try:
+    from optimized_file_upload import (
+        process_large_zip_chunked,
+        smart_data_sampling,
+        get_memory_usage,
+        MemoryManager,
+        optimized_file_upload_section
+    )
+    import_success = True
+except ImportError as e:
+    st.error(f"❌ Import Error: {str(e)}")
+    import_success = False
+
+def show_error_fix():
+    """Show error and fix information"""
     st.markdown(f"""
-    <div style="background: linear-gradient(90deg, #4CAF50, #45A049); color: white; padding: 1rem; border-radius: 8px; text-align: center; margin-bottom: 2rem;">
+    <div style="background: linear-gradient(90deg, #FF5722, #E64A19); color: white; padding: 1.5rem; border-radius: 10px; text-align: center; margin-bottom: 2rem;">
+        🚨 <strong>Import Error Fixed</strong><br>
         👤 <strong>User:</strong> strawberrymilktea0604 | 
-        🕐 <strong>Current Time:</strong> 2025-06-21 10:50:55 UTC | 
-        📍 <strong>Location:</strong> TungNguyen/demo/app.py | 
-        💾 <strong>Mode:</strong> Memory Optimized
+        🕐 <strong>Time:</strong> 2025-06-21 12:04:30 UTC<br>
+        ✅ <strong>Status:</strong> Function names now match
     </div>
     """, unsafe_allow_html=True)
+
+def main():
+    """Main application with fixed imports"""
     
-    # Memory monitoring
-    with st.sidebar:
-        st.markdown("## 📊 System Status")
-        memory_usage = get_memory_usage()
-        st.metric("💾 Memory Usage", f"{memory_usage:.1f} MB")
+    st.title("🔥 GDELT Hot Topics Forecaster - Fixed Version")
+    
+    show_error_fix()
+    
+    if import_success:
+        st.success("✅ All imports successful!")
         
-        if memory_usage > 500:
-            st.warning("⚠️ High memory usage")
-        else:
-            st.success("✅ Memory usage OK")
-    
-    # Optimized file upload section
-    st.markdown("### 📁 Optimized Large File Upload")
-    
-    uploaded_file = st.file_uploader(
-        "Upload GDELT ZIP file (up to 2GB)",
-        type=['zip'],
-        help="Large files will be processed in chunks to prevent crashes"
-    )
-    
-    if uploaded_file is not None:
-        file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
+        # User info
+        st.markdown(f"""
+        <div style="background: linear-gradient(90deg, #4CAF50, #45A049); color: white; padding: 1rem; border-radius: 8px; text-align: center; margin-bottom: 2rem;">
+            👤 <strong>User:</strong> strawberrymilktea0604 | 
+            🕐 <strong>Current Time:</strong> 2025-06-21 12:04:30 UTC | 
+            📍 <strong>Status:</strong> Fixed and Ready | 
+            🚀 <strong>Mode:</strong> Memory Optimized
+        </div>
+        """, unsafe_allow_html=True)
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("📁 File Size", f"{file_size_mb:.1f} MB")
-        with col2:
-            processing_mode = "Chunked" if file_size_mb > 200 else "Standard"
-            st.metric("🚀 Mode", processing_mode)
-        with col3:
-            est_time = max(1, int(file_size_mb / 20))
-            st.metric("⏱️ Est. Time", f"{est_time} min")
+        # Memory monitoring sidebar
+        with st.sidebar:
+            st.markdown("## 📊 System Status")
+            memory_usage = get_memory_usage()
+            st.metric("💾 Memory Usage", f"{memory_usage:.1f} MB")
+            
+            if memory_usage > 500:
+                st.warning("⚠️ High memory usage")
+            else:
+                st.success("✅ Memory usage OK")
+            
+            st.markdown("---")
+            st.markdown("### 💡 Upload Tips")
+            st.info("""
+            🔧 **Fixed Features:**
+            - ✅ All functions imported correctly
+            - ✅ Memory management optimized
+            - ✅ Chunked processing enabled
+            - ✅ Smart data sampling active
+            """)
         
-        if st.button("🚀 Process File (Optimized)", type="primary"):
-            with st.spinner("Processing large file... Please wait..."):
-                
-                # Process with optimized function
-                processed_df = process_large_zip_chunked(uploaded_file)
-                
-                if processed_df is not None:
-                    # Smart sampling if too large
-                    if len(processed_df) > 50000:
-                        processed_df = smart_data_sampling(processed_df, 50000)
-                    
-                    st.session_state['processed_data'] = processed_df
-                    st.success(f"✅ Successfully processed {len(processed_df):,} rows!")
-                    
-                    # Show preview
-                    st.dataframe(processed_df.head(), use_container_width=True)
-                    
-                    # Continue with your existing analysis code here...
-                    st.info("🔄 Ready for topic analysis and forecasting!")
+        # Main upload section
+        uploaded_file = optimized_file_upload_section()
+        
+        # Show next steps if data processed
+        if 'processed_data' in st.session_state and st.session_state['processed_data'] is not None:
+            st.markdown("### 🚀 Next Steps")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("🎯 Topic Analysis"):
+                    st.info("🔄 Topic analysis ready to implement...")
+            
+            with col2:
+                if st.button("📈 Generate Forecasts"):
+                    st.info("🔄 Forecasting ready to implement...")
+            
+            with col3:
+                if st.button("📊 Visualizations"):
+                    st.info("🔄 Visualizations ready to implement...")
+    
+    else:
+        st.error("❌ Import failed - please check optimized_file_upload.py file")
+        
+        st.markdown("### 🔧 To Fix:")
+        st.code("""
+        1. Update optimized_file_upload.py with the fixed version above
+        2. Commit and push changes to GitHub
+        3. Streamlit will auto-reload
+        """, language='text')
+    
+    # Memory cleanup button
+    st.markdown("---")
+    if st.button("🧹 Clear Memory"):
+        # Clear session state
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        
+        # Force garbage collection
+        gc.collect()
+        
+        st.success("✅ Memory cleared!")
+        st.rerun()
 
 if __name__ == "__main__":
     main()

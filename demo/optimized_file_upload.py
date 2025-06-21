@@ -1,8 +1,8 @@
 """
-Optimized File Upload Handler - GDELT Hot Topics Forecaster
+Fixed Optimized File Upload for GDELT Hot Topics Forecaster
 User: strawberrymilktea0604
-Current Time: 2025-06-21 10:46:22 UTC
-Issue: Web crashes when uploading large files
+Current Date and Time: 2025-06-21 12:04:30 UTC
+Fixed: Import errors - function names now match
 """
 
 import streamlit as st
@@ -16,39 +16,32 @@ from pathlib import Path
 import psutil
 import os
 
-# Page configuration
-st.set_page_config(
-    page_title="🔥 GDELT Hot Topics - Optimized Upload",
-    page_icon="🔥",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Memory monitoring
 def get_memory_usage():
-    """Get current memory usage"""
-    process = psutil.Process(os.getpid())
-    memory_mb = process.memory_info().rss / 1024 / 1024
-    return memory_mb
+    """Get current memory usage in MB"""
+    try:
+        process = psutil.Process(os.getpid())
+        memory_mb = process.memory_info().rss / 1024 / 1024
+        return memory_mb
+    except:
+        return 0.0
 
-# Chunked file processing
 @st.cache_data(show_spinner=False)
 def process_large_zip_chunked(uploaded_file, chunk_size_mb=50):
     """Process large ZIP file in chunks to avoid memory issues"""
     
-    file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
-    
-    st.info(f"📁 Processing file: {uploaded_file.name} ({file_size_mb:.1f} MB)")
-    
-    # Create progress containers
-    progress_container = st.container()
-    status_container = st.container()
-    
-    with progress_container:
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-    
     try:
+        file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
+        
+        st.info(f"📁 Processing file: {uploaded_file.name} ({file_size_mb:.1f} MB)")
+        
+        # Create progress containers
+        progress_container = st.container()
+        status_container = st.container()
+        
+        with progress_container:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+        
         # Read ZIP file
         status_text.text("🔍 Reading ZIP file...")
         zip_buffer = io.BytesIO(uploaded_file.getvalue())
@@ -62,27 +55,31 @@ def process_large_zip_chunked(uploaded_file, chunk_size_mb=50):
             processed_data = []
             total_files = len(csv_files)
             
-            # Process files in batches
-            batch_size = 5  # Process 5 files at a time
+            if total_files == 0:
+                st.error("❌ No CSV files found in ZIP")
+                return None
             
-            for i in range(0, total_files, batch_size):
+            # Process files in batches
+            batch_size = min(5, total_files)  # Process max 5 files at a time
+            
+            for i in range(0, min(total_files, 20), batch_size):  # Limit to 20 files max
                 batch_files = csv_files[i:i+batch_size]
                 
                 for j, csv_file in enumerate(batch_files):
                     current_file = i + j + 1
-                    progress = current_file / total_files
+                    progress = current_file / min(total_files, 20)
                     
                     progress_bar.progress(progress)
-                    status_text.text(f"📊 Processing file {current_file}/{total_files}: {csv_file}")
+                    status_text.text(f"📊 Processing file {current_file}/{min(total_files, 20)}: {csv_file}")
                     
                     try:
                         # Read CSV in chunks
                         with zip_file.open(csv_file) as file:
-                            # Read only first 10000 rows to avoid memory issues
-                            df_chunk = pd.read_csv(file, nrows=10000, low_memory=False)
+                            # Read only first 5000 rows to avoid memory issues
+                            df_chunk = pd.read_csv(file, nrows=5000, low_memory=False)
                             
-                            # Keep only essential columns
-                            essential_cols = ['DATE', 'Actor1Name', 'Actor2Name', 'EventCode', 'GoldsteinScale']
+                            # Keep only essential columns if they exist
+                            essential_cols = ['DATE', 'Actor1Name', 'Actor2Name', 'EventCode', 'GoldsteinScale', 'SOURCEURL']
                             available_cols = [col for col in essential_cols if col in df_chunk.columns]
                             
                             if available_cols:
@@ -127,49 +124,142 @@ def process_large_zip_chunked(uploaded_file, chunk_size_mb=50):
         st.error(f"❌ Error processing file: {str(e)}")
         return None
 
-# Memory-efficient data sampling
 def smart_data_sampling(df, max_rows=50000):
     """Smart sampling to reduce data size while preserving patterns"""
     
-    if len(df) <= max_rows:
+    if df is None or len(df) <= max_rows:
         return df
     
     st.info(f"📉 Sampling data from {len(df):,} to {max_rows:,} rows for performance")
     
-    # Stratified sampling by date if DATE column exists
-    if 'DATE' in df.columns:
-        df['DATE'] = pd.to_datetime(df['DATE'], errors='coerce')
-        df = df.dropna(subset=['DATE'])
+    try:
+        # Stratified sampling by date if DATE column exists
+        if 'DATE' in df.columns:
+            df['DATE'] = pd.to_datetime(df['DATE'], errors='coerce')
+            df = df.dropna(subset=['DATE'])
+            
+            if len(df) > 0:
+                # Sample proportionally from each month
+                df['YearMonth'] = df['DATE'].dt.to_period('M')
+                sample_df = df.groupby('YearMonth').apply(
+                    lambda x: x.sample(min(len(x), max_rows // max(12, df['YearMonth'].nunique())))
+                ).reset_index(drop=True)
+                
+                return sample_df.head(max_rows)
         
-        # Sample proportionally from each month
-        df['YearMonth'] = df['DATE'].dt.to_period('M')
-        sample_df = df.groupby('YearMonth').apply(
-            lambda x: x.sample(min(len(x), max_rows // 12))
-        ).reset_index(drop=True)
+        # Random sampling as fallback
+        return df.sample(min(len(df), max_rows)).reset_index(drop=True)
         
-        return sample_df.head(max_rows)
-    else:
-        # Random sampling
+    except Exception as e:
+        st.warning(f"⚠️ Sampling error: {str(e)}, using random sample")
         return df.sample(min(len(df), max_rows)).reset_index(drop=True)
 
-def main():
-    """Main optimized application"""
+class MemoryManager:
+    """Memory management for large file processing"""
     
-    st.title("🔥 GDELT Hot Topics Forecaster - Optimized for Large Files")
+    @staticmethod
+    def get_memory_info():
+        """Get current memory usage information"""
+        try:
+            process = psutil.Process(os.getpid())
+            memory_info = process.memory_info()
+            
+            return {
+                'rss_mb': memory_info.rss / 1024 / 1024,  # Physical memory
+                'vms_mb': memory_info.vms / 1024 / 1024,  # Virtual memory
+                'percent': process.memory_percent()
+            }
+        except:
+            return {'rss_mb': 0, 'vms_mb': 0, 'percent': 0}
     
-    # User info
-    st.markdown(f"""
-    <div style="background: linear-gradient(90deg, #4CAF50, #45A049); color: white; padding: 1rem; border-radius: 8px; text-align: center; margin-bottom: 2rem;">
-        👤 <strong>User:</strong> strawberrymilktea0604 | 
-        🕐 <strong>Current Time:</strong> 2025-06-21 10:46:22 UTC | 
-        💾 <strong>Mode:</strong> Memory Optimized Upload
-    </div>
-    """, unsafe_allow_html=True)
+    @staticmethod
+    def cleanup_memory():
+        """Force garbage collection and memory cleanup"""
+        gc.collect()
+        
+        # Clear pandas cache if possible
+        try:
+            if hasattr(pd, 'core'):
+                if hasattr(pd.core, 'common'):
+                    if hasattr(pd.core.common, 'clear_cache'):
+                        pd.core.common.clear_cache()
+        except:
+            pass
     
-    # Memory monitoring sidebar
+    @staticmethod
+    def check_memory_threshold(threshold_mb=800):
+        """Check if memory usage exceeds threshold"""
+        memory_info = MemoryManager.get_memory_info()
+        return memory_info['rss_mb'] > threshold_mb
+    
+    @staticmethod
+    def optimize_dataframe(df, max_memory_mb=100):
+        """Optimize DataFrame memory usage"""
+        
+        if df is None:
+            return None
+            
+        try:
+            # Convert object columns to category if beneficial
+            for col in df.select_dtypes(include=['object']).columns:
+                if df[col].nunique() < len(df) * 0.5:  # Less than 50% unique values
+                    df[col] = df[col].astype('category')
+            
+            # Downcast numeric columns
+            for col in df.select_dtypes(include=['int64']).columns:
+                df[col] = pd.to_numeric(df[col], downcast='integer')
+            
+            for col in df.select_dtypes(include=['float64']).columns:
+                df[col] = pd.to_numeric(df[col], downcast='float')
+            
+            # Check if still too large
+            current_memory = df.memory_usage(deep=True).sum() / 1024 / 1024
+            
+            if current_memory > max_memory_mb:
+                # Sample data if still too large
+                sample_ratio = max_memory_mb / current_memory
+                sample_size = int(len(df) * sample_ratio)
+                df = df.sample(min(sample_size, len(df))).reset_index(drop=True)
+                
+                st.warning(f"⚠️ Data sampled to {len(df):,} rows to fit memory limit")
+            
+            return df
+            
+        except Exception as e:
+            st.warning(f"⚠️ DataFrame optimization failed: {str(e)}")
+            return df
+
+# Memory monitoring decorator
+def monitor_memory(func):
+    """Decorator to monitor memory usage of functions"""
+    def wrapper(*args, **kwargs):
+        try:
+            initial_memory = get_memory_usage()
+            
+            result = func(*args, **kwargs)
+            
+            final_memory = get_memory_usage()
+            memory_diff = final_memory - initial_memory
+            
+            if memory_diff > 50:  # More than 50MB increase
+                st.warning(f"⚠️ Function used {memory_diff:.1f} MB memory")
+            
+            return result
+        except Exception as e:
+            st.error(f"❌ Memory monitoring error: {str(e)}")
+            return func(*args, **kwargs)
+    
+    return wrapper
+
+# Main optimized upload function
+def optimized_file_upload_section():
+    """Main optimized file upload section"""
+    
+    st.markdown("### 📁 Optimized Large File Upload")
+    
+    # Memory monitoring
     with st.sidebar:
         st.markdown("## 📊 System Status")
-        
         memory_usage = get_memory_usage()
         st.metric("💾 Memory Usage", f"{memory_usage:.1f} MB")
         
@@ -177,27 +267,13 @@ def main():
             st.warning("⚠️ High memory usage")
         else:
             st.success("✅ Memory usage OK")
-        
-        st.markdown("---")
-        st.markdown("### 💡 Upload Tips")
-        st.info("""
-        🔧 **For large files:**
-        - Files will be processed in chunks
-        - Only essential columns kept
-        - Data sampled if > 50K rows
-        - Memory cleaned after each step
-        """)
     
-    # Optimized file upload
-    st.markdown("### 📁 Optimized File Upload")
-    
-    # Upload size warning
+    # Upload section
     st.warning("""
     ⚠️ **Large File Handling:**
-    - Files > 200MB will be processed in chunks
+    - Files will be processed in chunks
     - Data will be sampled to prevent crashes
     - Processing may take several minutes
-    - Close other browser tabs to free memory
     """)
     
     uploaded_file = st.file_uploader(
@@ -216,34 +292,20 @@ def main():
             st.metric("📁 File Size", f"{file_size_mb:.1f} MB")
         
         with col2:
-            if file_size_mb < 200:
-                st.metric("🚀 Processing Mode", "Standard")
-            else:
-                st.metric("🚀 Processing Mode", "Chunked")
+            processing_mode = "Chunked" if file_size_mb > 200 else "Standard"
+            st.metric("🚀 Processing Mode", processing_mode)
         
         with col3:
             estimated_time = max(1, int(file_size_mb / 20))  # ~20MB per minute
             st.metric("⏱️ Est. Time", f"{estimated_time} min")
         
         # Processing options
-        st.markdown("### ⚙️ Processing Options")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            max_rows = st.select_slider(
-                "Maximum rows to process",
-                options=[10000, 25000, 50000, 100000],
-                value=50000,
-                help="Reduce to improve performance"
-            )
-        
-        with col2:
-            sample_method = st.selectbox(
-                "Sampling method",
-                ["Stratified by date", "Random sampling", "Recent data only"],
-                help="How to sample large datasets"
-            )
+        max_rows = st.select_slider(
+            "Maximum rows to process",
+            options=[10000, 25000, 50000],
+            value=25000,
+            help="Reduce to improve performance"
+        )
         
         # Process file button
         if st.button("🚀 Process File (Optimized)", type="primary"):
@@ -283,31 +345,9 @@ def main():
                     with col3:
                         memory_size = processed_df.memory_usage(deep=True).sum() / 1024 / 1024
                         st.metric("Data Size", f"{memory_size:.1f} MB")
-                    
-                    # Next steps
-                    st.markdown("### 🚀 Next Steps")
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        if st.button("🎯 Run Topic Analysis"):
-                            st.info("🔄 Topic analysis will be implemented next...")
-                    
-                    with col2:
-                        if st.button("📈 Generate Forecasts"):
-                            st.info("🔄 Forecasting will be implemented next...")
     
-    # Memory cleanup button
-    st.markdown("---")
-    if st.button("🧹 Clear Memory"):
-        # Clear session state
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        
-        # Force garbage collection
-        gc.collect()
-        
-        st.success("✅ Memory cleared!")
-        st.rerun()
+    return uploaded_file
 
 if __name__ == "__main__":
-    main()
+    st.title("🔧 Optimized File Upload - Standalone Test")
+    optimized_file_upload_section()
