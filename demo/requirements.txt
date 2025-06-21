@@ -1,0 +1,34 @@
+# GDELT Hot Topics Forecaster Dependencies
+# User: strawberrymilktea0604
+# Updated: 2025-06-21 09:26:56 UTC
+
+# Core Streamlit and Data Processing
+streamlit>=1.28.0
+pandas>=1.5.0
+numpy>=1.21.0
+
+# Visualization
+matplotlib>=3.5.0
+seaborn>=0.11.0
+plotly>=5.10.0
+
+# Machine Learning
+scikit-learn>=1.0.0
+xgboost>=1.6.0
+
+# Time Series Forecasting
+prophet>=1.1.0
+
+# System and File Processing
+psutil>=5.8.0
+
+# Data Processing utilities
+python-dateutil>=2.8.0
+pytz>=2022.1
+
+# Additional utilities
+scipy>=1.7.0
+joblib>=1.1.0
+
+# Optional TensorFlow (will fallback gracefully if fails)
+tensorflow>=2.8.0; python_version>="3.8"
